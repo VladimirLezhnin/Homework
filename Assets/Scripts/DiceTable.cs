@@ -12,8 +12,13 @@ public sealed class DiceTable : MonoBehaviour
 
     private readonly WaitForFixedUpdate physicsStep = new();
     private int[] values;
+    private RoundSettings nextSettings;
 
     public Round Round { get; } = new();
+    public int MaxDiceCount => dice?.Length ?? 0;
+    public RoundSettings NextSettings => nextSettings;
+    public bool CanRoll => isActiveAndEnabled && input != null && !input.IsRebinding && 
+                           nextSettings != null && Round.State != RoundState.Rolling;
 
     private void Awake()
     {
@@ -26,6 +31,8 @@ public sealed class DiceTable : MonoBehaviour
         }
 
         values = new int[dice.Length];
+        if (nextSettings == null)
+            RoundSettings.TryCreate(dice.Length, null, null, null, out nextSettings);
     }
 
     private void OnEnable() => input.RollRequested += Roll;
@@ -39,21 +46,51 @@ public sealed class DiceTable : MonoBehaviour
         Round.Cancel();
     }
 
-    private void Roll()
+    public void SetNextRoundSettings(RoundSettings settings)
     {
-        if (!isActiveAndEnabled || !Round.TryBegin())
+        if (Round.State == RoundState.Rolling)
             return;
 
-        foreach (var die in dice)
+        nextSettings = settings != null && settings.DiceCount <= MaxDiceCount ? settings : null;
+    }
+
+    public void Roll()
+    {
+        if (!CanRoll)
+            return;
+
+        var settings = nextSettings;
+        if (values.Length != settings.DiceCount)
+            values = new int[settings.DiceCount];
+        
+        RoundSettings.TryCreate(settings.DiceCount, null, null, null, out nextSettings);
+        if (!Round.TryBegin(settings))
+            return;
+
+        for (var i = 0; i < dice.Length; i++)
         {
-            if (die == null || !die.isActiveAndEnabled)
+            var die = dice[i];
+            if (die == null)
             {
                 CancelRound();
                 return;
             }
 
-            die.Roll();
+            var selected = i < values.Length;
+            if (!selected && die.isActiveAndEnabled)
+                die.ResetPosition();
+
+            die.gameObject.SetActive(selected);
         }
+
+        if (!AllAvailable())
+        {
+            CancelRound();
+            return;
+        }
+
+        for (var i = 0; i < values.Length; i++)
+            dice[i].Roll();
 
         StartCoroutine(WaitForResult());
     }
@@ -65,17 +102,23 @@ public sealed class DiceTable : MonoBehaviour
         while (elapsed < timeout)
         {
             yield return physicsStep;
-                
+
+            if (!AllAvailable())
+            {
+                CancelRound();
+                yield break;
+            }
+
             elapsed += Time.fixedDeltaTime;
             stableTime = AllSleeping() ? stableTime + Time.fixedDeltaTime : 0f;
             if (stableTime < settleTime)
                 continue;
 
-            for (var i = 0; i < dice.Length; i++)
+            for (var i = 0; i < values.Length; i++)
             {
-                if (dice[i].TryReadValue(out values[i])) 
+                if (dice[i].TryReadValue(out values[i]))
                     continue;
-                    
+
                 CancelRound();
                 yield break;
             }
@@ -87,7 +130,23 @@ public sealed class DiceTable : MonoBehaviour
         CancelRound();
     }
 
-    private bool AllSleeping() => dice.All(die => die && die.IsSleeping);
+    private bool AllAvailable()
+    {
+        for (var i = 0; i < values.Length; i++)
+            if (!dice[i] || !dice[i].isActiveAndEnabled)
+                return false;
+
+        return true;
+    }
+
+    private bool AllSleeping()
+    {
+        for (var i = 0; i < values.Length; i++)
+            if (!dice[i].IsSleeping)
+                return false;
+
+        return true;
+    }
 
     private void CancelRound()
     {

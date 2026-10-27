@@ -1,5 +1,7 @@
 using System;
+using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 public sealed class RollInput : MonoBehaviour
@@ -71,7 +73,15 @@ public sealed class RollInput : MonoBehaviour
         BindingChanged?.Invoke();
     }
 
-    private void OnRoll(InputAction.CallbackContext context) => RollRequested?.Invoke();
+    private void OnRoll(InputAction.CallbackContext context)
+    {
+        var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+        var field = selected != null ? selected.GetComponentInParent<TMP_InputField>() : null;
+        if (field != null && field.isFocused)
+            return;
+
+        RollRequested?.Invoke();
+    }
 
     private void FinishRebinding(InputActionRebindingExtensions.RebindingOperation operation)
     {
