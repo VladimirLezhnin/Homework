@@ -7,8 +7,9 @@ using UnityEngine.InputSystem;
 public sealed class RollInput : MonoBehaviour
 {
     private const string BindingKey = "DiceGame.RollBinding";
+    private const string DefaultBinding = "<Keyboard>/space";
 
-    [SerializeField] private InputAction roll = new("Roll", InputActionType.Button, "<Keyboard>/space");
+    [SerializeField] private InputAction roll = new("Roll", InputActionType.Button, DefaultBinding);
 
     private InputActionRebindingExtensions.RebindingOperation rebinding;
 
@@ -20,7 +21,18 @@ public sealed class RollInput : MonoBehaviour
 
     private void Awake()
     {
+        roll.RemoveBindingOverride(0);
+        if (IsPointerBinding(roll.bindings[0].path))
+            roll.ChangeBinding(0).WithPath(DefaultBinding);
+
         var path = PlayerPrefs.GetString(BindingKey);
+        if (IsPointerBinding(path))
+        {
+            PlayerPrefs.DeleteKey(BindingKey);
+            PlayerPrefs.Save();
+            return;
+        }
+
         if (!string.IsNullOrEmpty(path))
             roll.ApplyBindingOverride(0, path);
     }
@@ -48,6 +60,7 @@ public sealed class RollInput : MonoBehaviour
         roll.Disable();
         rebinding = roll.PerformInteractiveRebinding(0)
             .WithExpectedControlType("Button")
+            .WithControlsExcluding("<Pointer>")
             .WithCancelingThrough("<Keyboard>/escape")
             .WithTimeout(10f)
             .OnComplete(operation =>
@@ -75,6 +88,10 @@ public sealed class RollInput : MonoBehaviour
 
     private void OnRoll(InputAction.CallbackContext context)
     {
+        // Pointer input is routed through UI UnityEvents, not the global shortcut.
+        if (context.control.device is Pointer)
+            return;
+
         var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
         var field = selected != null ? selected.GetComponentInParent<TMP_InputField>() : null;
         if (field != null && field.isFocused)
@@ -82,6 +99,12 @@ public sealed class RollInput : MonoBehaviour
 
         RollRequested?.Invoke();
     }
+
+    private static bool IsPointerBinding(string path) => !string.IsNullOrEmpty(path) &&
+        (path.StartsWith("<Mouse>", StringComparison.OrdinalIgnoreCase) ||
+         path.StartsWith("<Pointer>", StringComparison.OrdinalIgnoreCase) ||
+         path.StartsWith("<Touchscreen>", StringComparison.OrdinalIgnoreCase) ||
+         path.StartsWith("<Pen>", StringComparison.OrdinalIgnoreCase));
 
     private void FinishRebinding(InputActionRebindingExtensions.RebindingOperation operation)
     {

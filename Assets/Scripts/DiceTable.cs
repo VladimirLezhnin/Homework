@@ -17,8 +17,7 @@ public sealed class DiceTable : MonoBehaviour
     public Round Round { get; } = new();
     public int MaxDiceCount => dice?.Length ?? 0;
     public RoundSettings NextSettings => nextSettings;
-    public bool CanRoll => isActiveAndEnabled && input != null && !input.IsRebinding && 
-                           nextSettings != null && Round.State != RoundState.Rolling;
+    public bool CanRoll => isActiveAndEnabled && input != null && !input.IsRebinding && nextSettings != null && Round.State != RoundState.Rolling;
 
     private void Awake()
     {
@@ -63,7 +62,6 @@ public sealed class DiceTable : MonoBehaviour
         if (values.Length != settings.DiceCount)
             values = new int[settings.DiceCount];
         
-        RoundSettings.TryCreate(settings.DiceCount, null, null, null, out nextSettings);
         if (!Round.TryBegin(settings))
             return;
 

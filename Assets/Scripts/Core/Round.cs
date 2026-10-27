@@ -63,9 +63,15 @@ namespace Core
 
             Score = score;
             Values = Array.AsReadOnly(result);
+
+            if (score < LossMinimum)
+            {
+                Cancel();
+                return;
+            }
+
             Result = score >= WinMinimum ? RoundResult.Win :
                 score >= DrawMinimum ? RoundResult.Draw : RoundResult.Loss;
-            
             SetState(RoundState.Finished);
         }
 

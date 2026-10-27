@@ -8,7 +8,6 @@ public sealed class DicePanel : MonoBehaviour
     [SerializeField] private DiceTable table;
     [SerializeField] private RollInput input;
     [SerializeField] private TMP_Text score;
-    [SerializeField] private TMP_Text binding;
     [SerializeField] private TMP_Text rules;
     [SerializeField] private TMP_Text error;
     [SerializeField] private TMP_InputField diceCountInput;
@@ -18,11 +17,11 @@ public sealed class DicePanel : MonoBehaviour
     [SerializeField] private Button rollButton;
 
     private Round model;
-    private RoundSettings displayedSettings;
+    private int settingsDiceCount;
 
     private void Awake()
     {
-        if (table == null || input == null || score == null || binding == null || rules == null ||
+        if (table == null || input == null || score == null || rules == null ||
             error == null || diceCountInput == null || lossMinimumInput == null ||
             drawMinimumInput == null || winMinimumInput == null || rollButton == null)
         {
@@ -41,29 +40,23 @@ public sealed class DicePanel : MonoBehaviour
         ClearMinimumInputs();
         ApplySettings();
         Refresh();
-        RefreshBinding();
     }
 
     private void OnEnable()
     {
         model.Changed += Refresh;
-        input.BindingChanged += RefreshBinding;
         Refresh();
-        RefreshBinding();
     }
 
     private void Start()
     {
         Refresh();
-        RefreshBinding();
     }
 
     private void OnDisable()
     {
         if (model != null)
             model.Changed -= Refresh;
-        if (input != null)
-            input.BindingChanged -= RefreshBinding;
     }
 
     public void UpdateSettings()
@@ -91,6 +84,12 @@ public sealed class DicePanel : MonoBehaviour
         if (!int.TryParse(diceCountInput.text, out var count) || count < 1 || count > table.MaxDiceCount)
             return RejectSettings($"Введите число кубиков от 1 до {table.MaxDiceCount}");
 
+        if (count != settingsDiceCount)
+        {
+            ClearMinimumInputs();
+            settingsDiceCount = count;
+        }
+
         if (!TryReadMinimum(lossMinimumInput, out var loss) ||
             !TryReadMinimum(drawMinimumInput, out var draw) ||
             !TryReadMinimum(winMinimumInput, out var win))
@@ -114,28 +113,25 @@ public sealed class DicePanel : MonoBehaviour
 
     private void Refresh()
     {
-        if (model.Settings != null && model.Settings != displayedSettings)
-        {
-            displayedSettings = model.Settings;
-            diceCountInput.SetTextWithoutNotify(model.DiceCount.ToString());
-            ClearMinimumInputs();
-            error.text = string.Empty;
-        }
-
         score.text = model.State switch
         {
             RoundState.Rolling => "Бросаем кости . . .",
-            RoundState.Finished => $"Сумма: {model.Score}\n{ResultLabel(model.Result)}\n" + $"Кубики: {string.Join(", ", model.Values)}",
-            RoundState.Cancelled => "Бросок не засчитан. Повторите бросок",
+            RoundState.Finished => ScoreLabel(ResultLabel(model.Result)),
+            RoundState.Cancelled when model.Values.Count > 0 => ScoreLabel(
+                $"Не засчитан: {model.Score} < {model.LossMinimum} (минимум поражения)"),
+            RoundState.Cancelled => "Сумма: не определена.\n" +
+                "Результат броска не получен. Повторите бросок",
             _ => "Ожидаем броска . . ."
         };
 
         if (model.Settings != null)
         {
             var title = model.State == RoundState.Rolling ? "Текущий бросок" : "Последний бросок";
-            rules.text = $"{title}\nКубиков: {model.DiceCount}\n" +
-                $"Минимум поражения: {model.LossMinimum}\n" +
-                $"Минимум ничьей: {model.DrawMinimum}\nМинимум победы: {model.WinMinimum}";
+            rules.text = $"{title}. Кубиков: {model.DiceCount}\n" +
+                $"Не засчитан: сумма меньше {model.LossMinimum}\n" +
+                $"Поражение: {model.LossMinimum}–{model.DrawMinimum - 1}\n" +
+                $"Ничья: {model.DrawMinimum}–{model.WinMinimum - 1}\n" +
+                $"Победа: от {model.WinMinimum}";
         }
         else
         {
@@ -144,17 +140,15 @@ public sealed class DicePanel : MonoBehaviour
                 $"Следующий бросок\nКубиков: {settings.DiceCount}\n" +
                 $"Минимум поражения: {MinimumLabel(settings.LossMinimum)}\n" +
                 $"Минимум ничьей: {MinimumLabel(settings.DrawMinimum)}\n" +
-                $"Минимум победы: {MinimumLabel(settings.WinMinimum)}";
+                $"Минимум победы: {MinimumLabel(settings.WinMinimum)}\n" +
+                "Ниже минимума поражения — не засчитан";
         }
 
         RefreshControls();
     }
 
-    private void RefreshBinding()
-    {
-        binding.text = input.IsRebinding ? "Нажмите новую кнопку или Esc для отмены" : $"Бросок: {input.BindingLabel}";
-        RefreshControls();
-    }
+    private string ScoreLabel(string result) =>
+        $"Сумма: {model.Score}\n{result}\nКубики: {string.Join(" + ", model.Values)}";
 
     private void RefreshControls()
     {
