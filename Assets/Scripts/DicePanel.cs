@@ -6,7 +6,7 @@ using UnityEngine.UI;
 public sealed class DicePanel : MonoBehaviour
 {
     [SerializeField] private DiceTable table;
-    [SerializeField] private RollInput input;
+    [SerializeField] private DiceRollInput input;
     [SerializeField] private TMP_Text score;
     [SerializeField] private TMP_Text rules;
     [SerializeField] private TMP_Text error;

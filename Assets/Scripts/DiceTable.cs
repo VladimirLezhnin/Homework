@@ -5,7 +5,7 @@ using UnityEngine;
 
 public sealed class DiceTable : MonoBehaviour
 {
-    [SerializeField] private RollInput input;
+    [SerializeField] private DiceRollInput input;
     [SerializeField] private Die[] dice;
     [SerializeField] private float settleTime = 0.25f;
     [SerializeField] private float timeout = 15f;
